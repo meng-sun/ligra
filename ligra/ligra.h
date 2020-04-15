@@ -1,5 +1,5 @@
 // This code is part of the project "Ligra: A Lightweight Graph Processing
-// Framework for Shared Memory", presented at Principles and Practice of 
+// Framework for Shared Memory", presented at Principles and Practice of
 // Parallel Programming, 2013.
 // Copyright (c) 2013 Julian Shun and Guy Blelloch
 //
@@ -110,23 +110,34 @@ vertexSubsetData<data> edgeMapDenseForward(graph<vertex> GA, VS& vertexSubset, F
 template <class data, class vertex, class VS, class F>
 vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices, VS& indices,
         uintT* degrees, uintT m, F &f, const flags fl) {
+  std::cerr << 1 << std::endl;
   using S = tuple<uintE, data>;
   long n = indices.n;
   S* outEdges;
   long outEdgeCount = 0;
 
+  std::cerr << 2 << std::endl;
   if (should_output(fl)) {
+    std::cerr << 2.0 << std::endl;
     uintT* offsets = degrees;
+    std::cerr << 2.1 << std::endl;
     outEdgeCount = sequence::plusScan(offsets, offsets, m);
     outEdges = newA(S, outEdgeCount);
+    std::cerr << 2.2 << std::endl;
     auto g = get_emsparse_gen<data>(outEdges);
+    std::cerr << 2.3 << std::endl;
+    std::cerr << "N workers: " << __cilkrts_get_nworkers() << std::endl;
     parallel_for (size_t i = 0; i < m; i++) {
       uintT v = indices.vtx(i), o = offsets[i];
+      std::cerr << __cilkrts_get_worker_number() << "|" << 2.40 << std::endl;
       vertex vert = frontierVertices[i];
+      std::cerr << __cilkrts_get_worker_number() << "|" << 2.45 << std::endl;
       vert.decodeOutNghSparse(v, o, f, g);
     }
   } else {
+    std::cerr << 2.5 << std::endl;
     auto g = get_emsparse_nooutput_gen<data>();
+    std::cerr << 2.6 << std::endl;
     parallel_for (size_t i = 0; i < m; i++) {
       uintT v = indices.vtx(i);
       vertex vert = frontierVertices[i];
@@ -134,6 +145,7 @@ vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices
     }
   }
 
+  std::cerr << 3 << std::endl;
   if (should_output(fl)) {
     S* nextIndices = newA(S, outEdgeCount);
     if (fl & remove_duplicates) {
@@ -245,7 +257,7 @@ vertexSubsetData<data> edgeMapData(graph<vertex>& GA, VS &vs, F f,
   uintT* degrees = NULL;
   vertex* frontierVertices = NULL;
   uintT outDegrees = 0;
-  if(threshold > 0) { //compute sum of out-degrees if threshold > 0 
+  if(threshold > 0) { //compute sum of out-degrees if threshold > 0
     vs.toSparse();
     degrees = newA(uintT, m);
     frontierVertices = newA(vertex,m);

@@ -37,6 +37,10 @@
 #include "quickSort.h"
 #include "utils.h"
 #include "graph.h"
+#include <vector>
+#include <memory>
+#include <pmem_allocator.h>
+#include <libpmem.h>
 using namespace std;
 
 typedef pair<uintE,uintE> intPair;
@@ -201,9 +205,45 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
     abort();
   }
 
+  string path = "/mnt/pmem12/";
+  path += "bfs";
+
+  char* pmemaddr;
+  int is_pmem;
+  size_t mapped_len;
+  ifstream f(path.c_str());
+
+  if (f.good()) {
+    pmemaddr = (char*)pmem_map_file(path.c_str(), 4096,
+        PMEM_FILE_CREATE, 0666, &mapped_len, &is_pmem);
+  } else {
+    pmemaddr = (char*)pmem_map_file(path.c_str(), 4096,
+        PMEM_FILE_CREATE|PMEM_FILE_EXCL, 0666, &mapped_len, &is_pmem);
+  }
+
+  if (pmemaddr == NULL) {
+    perror("pmem_map_file");
+    exit(1);
+  }
+
+  if (is_pmem) {
+    cout << "Pmem successfully allocated" << endl;
+  } else {
+    cout << "Error not pmem" << endl;
+    exit(1);
+  }
+
+  uintE* bufaddr = reinterpret_cast<uintE*>(pmemaddr);
+
+  //libmemkind::pmem::allocator<uintE> alc{ "/mnt/pmem12", MEMKIND_PMEM_MIN_SIZE };
+
+  //std::allocator<uintE> alc;
   uintT* offsets = newA(uintT,n);
 #ifndef WEIGHTED
   uintE* edges = newA(uintE,m);
+  uintE* nv = bufaddr;
+  //memmove(&nv[0], pmemaddr, sizeof(nv))
+  //uintE* nv = alc.allocate(m);
 #else
   intE* edges = newA(intE,2*m);
 #endif
@@ -212,6 +252,7 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
   {parallel_for(long i=0; i<m; i++) {
 #ifndef WEIGHTED
       edges[i] = atol(W.Strings[i+n+3]);
+      nv[i] = edges[i];
 #else
       edges[2*i] = atol(W.Strings[i+n+3]);
       edges[2*i+1] = atol(W.Strings[i+n+m+3]);
@@ -226,7 +267,8 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
     uintT l = ((i == n-1) ? m : offsets[i+1])-offsets[i];
     v[i].setOutDegree(l);
 #ifndef WEIGHTED
-    v[i].setOutNeighbors(edges+o);
+    //v[i].setOutNeighbors(edges+o);
+    v[i].setOutNeighbors(nv+o);
 #else
     v[i].setOutNeighbors(edges+2*o);
 #endif
@@ -270,6 +312,9 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
 #ifndef WEIGHTED
     uintE* inEdges = newA(uintE,m);
     inEdges[0] = temp[0].second;
+    //uintE* niv = alc.allocate(m);
+    uintE* niv = bufaddr + m + 2;
+    niv[0] = temp[0].second;
 #else
     intE* inEdges = newA(intE,2*m);
     inEdges[0] = temp[0].second.first;
@@ -278,6 +323,7 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
     {parallel_for(long i=1;i<m;i++) {
 #ifndef WEIGHTED
       inEdges[i] = temp[i].second;
+      niv[i] = temp[i].second;
 #else
       inEdges[2*i] = temp[i].second.first;
       inEdges[2*i+1] = temp[i].second.second;
@@ -298,12 +344,12 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
       uintT l = ((i == n-1) ? m : tOffsets[i+1])-tOffsets[i];
       v[i].setInDegree(l);
 #ifndef WEIGHTED
-      v[i].setInNeighbors(inEdges+o);
+      //v[i].setInNeighbors(inEdges+o);
+      v[i].setInNeighbors(niv+o);
 #else
       v[i].setInNeighbors(inEdges+2*o);
 #endif
       }}
-
     free(tOffsets);
     Uncompressed_Mem<vertex>* mem = new Uncompressed_Mem<vertex>(v,n,m,edges,inEdges);
     return graph<vertex>(v,n,m,mem);
