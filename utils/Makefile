@@ -9,7 +9,7 @@ endif
 #compilers
 ifdef CILK
 PCC = g++
-PCFLAGS = -std=c++14 -fcilkplus -lcilkrts -O3 -DCILK $(INTT) $(INTE)
+PCFLAGS = -std=c++14 -L/root/tgdb/build/third_party/cilkrtslocal/src/cilkrts-project -fcilkplus -lcilkrts -O3 -DCILK $(INTT) $(INTE) -Wl,-rpath=/root/pmdk/src/debug -lpmem
 PLFLAGS = -fcilkplus -lcilkrts
 
 else ifdef MKLROOT

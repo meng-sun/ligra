@@ -62,17 +62,25 @@ namespace decode_uncompressed {
   // updateAtomic.
   template <class V, class F, class G>
   inline void decodeOutNghSparse(V* v, long i, uintT o, F &f, G &g) {
+    std::cerr << "A" << std::endl;
     uintE d = v->getOutDegree();
+    std::cerr << "B" << std::endl;
     granular_for(j, 0, d, (d > 1000), {
+      std::cerr << "B.0" << std::endl;
       uintE ngh = v->getOutNeighbor(j);
+      std::cerr << "B.1" << std::endl;
       if (f.cond(ngh)) {
+        std::cerr << "B.1.0" << std::endl;
 #ifndef WEIGHTED
+        std::cerr << "B.1.1" << std::endl;
         auto m = f.updateAtomic(i, ngh);
 #else
         auto m = f.updateAtomic(i, ngh, v->getOutWeight(j));
 #endif
+        std::cerr << "B.1.2" << std::endl;
         g(ngh, o+j, m);
       } else {
+        std::cerr << "B.1.5" << std::endl;
         g(ngh, o+j);
       }
     });
