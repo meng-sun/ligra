@@ -110,34 +110,34 @@ vertexSubsetData<data> edgeMapDenseForward(graph<vertex> GA, VS& vertexSubset, F
 template <class data, class vertex, class VS, class F>
 vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices, VS& indices,
         uintT* degrees, uintT m, F &f, const flags fl) {
-  std::cerr << 1 << std::endl;
+  //std::cerr << 1 << std::endl;
   using S = tuple<uintE, data>;
   long n = indices.n;
   S* outEdges;
   long outEdgeCount = 0;
 
-  std::cerr << 2 << std::endl;
+  //std::cerr << 2 << std::endl;
   if (should_output(fl)) {
-    std::cerr << 2.0 << std::endl;
+    //std::cerr << 2.0 << std::endl;
     uintT* offsets = degrees;
-    std::cerr << 2.1 << std::endl;
+    //std::cerr << 2.1 << std::endl;
     outEdgeCount = sequence::plusScan(offsets, offsets, m);
     outEdges = newA(S, outEdgeCount);
-    std::cerr << 2.2 << std::endl;
+    //std::cerr << 2.2 << std::endl;
     auto g = get_emsparse_gen<data>(outEdges);
-    std::cerr << 2.3 << std::endl;
-    std::cerr << "N workers: " << __cilkrts_get_nworkers() << std::endl;
+    //std::cerr << 2.3 << std::endl;
+    //std::cerr << "N workers: " << __cilkrts_get_nworkers() << std::endl;
     parallel_for (size_t i = 0; i < m; i++) {
       uintT v = indices.vtx(i), o = offsets[i];
-      std::cerr << __cilkrts_get_worker_number() << "|" << 2.40 << std::endl;
+      //std::cerr << __cilkrts_get_worker_number() << "|" << 2.40 << std::endl;
       vertex vert = frontierVertices[i];
-      std::cerr << __cilkrts_get_worker_number() << "|" << 2.45 << std::endl;
+      //std::cerr << __cilkrts_get_worker_number() << "|" << 2.45 << std::endl;
       vert.decodeOutNghSparse(v, o, f, g);
     }
   } else {
-    std::cerr << 2.5 << std::endl;
+    //std::cerr << 2.5 << std::endl;
     auto g = get_emsparse_nooutput_gen<data>();
-    std::cerr << 2.6 << std::endl;
+    //std::cerr << 2.6 << std::endl;
     parallel_for (size_t i = 0; i < m; i++) {
       uintT v = indices.vtx(i);
       vertex vert = frontierVertices[i];
@@ -145,7 +145,7 @@ vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices
     }
   }
 
-  std::cerr << 3 << std::endl;
+  //std::cerr << 3 << std::endl;
   if (should_output(fl)) {
     S* nextIndices = newA(S, outEdgeCount);
     if (fl & remove_duplicates) {
@@ -159,8 +159,10 @@ vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices
     auto p = [] (tuple<uintE, data>& v) { return std::get<0>(v) != UINT_E_MAX; };
     size_t nextM = pbbs::filterf(outEdges, nextIndices, outEdgeCount, p);
     free(outEdges);
+    //for (size_t i=0; i<outEdgeCount; i++) std::cerr << "nextI| " << std::get<0>(nextIndices[i]) << std::endl;
     return vertexSubsetData<data>(n, nextM, nextIndices);
   } else {
+    std::cout << "should not output fl" << std::endl;
     return vertexSubsetData<data>(n);
   }
 }
