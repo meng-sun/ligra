@@ -259,6 +259,7 @@ namespace decode_compressed {
 }
 
 struct compressedSymmetricVertex {
+  long accesses = 0; // debug
   uchar* neighbors;
   uintT degree;
   uchar* getInNeighbors() { return neighbors; }
@@ -319,6 +320,7 @@ struct compressedSymmetricVertex {
 };
 
 struct compressedAsymmetricVertex {
+  long accesses = 0; // debug
   uchar* inNeighbors;
   uchar* outNeighbors;
   uintT outDegree;

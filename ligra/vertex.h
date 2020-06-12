@@ -1,6 +1,7 @@
 #ifndef VERTEX_H
 #define VERTEX_H
 #include "vertexSubset.h"
+#include <libpmem.h>
 using namespace std;
 
 namespace decode_uncompressed {
@@ -12,9 +13,14 @@ namespace decode_uncompressed {
   template <class vertex, class F, class G, class VS>
   inline void decodeInNghBreakEarly(vertex* v, long v_id, VS& vertexSubset, F &f, G &g, bool parallel = 0) {
     uintE d = v->getInDegree();
+    //std::cerr << "decodeInNghBreakEarly" << std::endl;
     if (!parallel || d < 1000) {
       for (size_t j=0; j<d; j++) {
+#ifndef DEBUG
         uintE ngh = v->getInNeighbor(j);
+#else
+        uintE ngh = v->getInNeighbor(j, true);
+#endif
         if (vertexSubset.isIn(ngh)) {
 #ifndef WEIGHTED
           auto m = f.update(ngh, v_id);
@@ -27,7 +33,11 @@ namespace decode_uncompressed {
       }
     } else {
       parallel_for(size_t j=0; j<d; j++) {
+#ifndef DEBUG
         uintE ngh = v->getInNeighbor(j);
+#else
+        uintE ngh = v->getInNeighbor(j, true);
+#endif
         if (vertexSubset.isIn(ngh)) {
 #ifndef WEIGHTED
           auto m = f.updateAtomic(ngh, v_id);
@@ -37,6 +47,9 @@ namespace decode_uncompressed {
           g(v_id, m);
         }
       }
+#ifdef DEBUG
+      v->accesses += d;
+#endif
     }
   }
 
@@ -44,9 +57,14 @@ namespace decode_uncompressed {
   // updateAtomic.
   template <class V, class F, class G>
   inline void decodeOutNgh(V* v, long i, F &f, G &g) {
+    //std::cout << "decodeOutNgh\n";
     uintE d = v->getOutDegree();
     granular_for(j, 0, d, (d > 1000), {
+#ifndef DEBUG
       uintE ngh = v->getOutNeighbor(j);
+#else
+      uintE ngh = v->getOutNeighbor(j, true);
+#endif
       if (f.cond(ngh)) {
 #ifndef WEIGHTED
       auto m = f.updateAtomic(i,ngh);
@@ -56,31 +74,32 @@ namespace decode_uncompressed {
         g(ngh, m);
       }
     });
+#ifdef DEBUG
+    v->accesses += d;
+#endif
   }
 
   // Used by edgeMapSparse. For each out-neighbor satisfying cond, call
   // updateAtomic.
   template <class V, class F, class G>
   inline void decodeOutNghSparse(V* v, long i, uintT o, F &f, G &g) {
-    //std::cerr << "A" << std::endl;
+    //std::cout << "decodeOutNghSparse\n";
     uintE d = v->getOutDegree();
-    //std::cerr << "B" << std::endl;
     granular_for(j, 0, d, (d > 1000), {
-      //std::cerr << "B.0" << std::endl;
+#ifndef DEBUG
       uintE ngh = v->getOutNeighbor(j);
-      //std::cerr << "B.1" << std::endl;
+#else
+      uintE ngh = v->getOutNeighbor(j, true);
+#endif
+      //if (pmem_is_pmem(test, d*sizeof(uintE))) { std::cerr << "bad pmem" << std::endl; exit(1); }
       if (f.cond(ngh)) {
-        //std::cerr << "B.1.0" << std::endl;
 #ifndef WEIGHTED
-        //std::cerr << "B.1.1" << std::endl;
         auto m = f.updateAtomic(i, ngh);
 #else
         auto m = f.updateAtomic(i, ngh, v->getOutWeight(j));
 #endif
-        //std::cerr << "B.1.2" << std::endl;
         g(ngh, o+j, m);
       } else {
-        //std::cerr << "B.1.5" << std::endl;
         g(ngh, o+j);
       }
     });
@@ -93,7 +112,11 @@ namespace decode_uncompressed {
     uintE d = v->getOutDegree();
     size_t k = 0;
     for (size_t j=0; j<d; j++) {
+#ifndef DEBUG
       uintE ngh = v->getOutNeighbor(j);
+#else
+      uintE ngh = v->getOutNeighbor(j, true);
+#endif
       if (f.cond(ngh)) {
 #ifndef WEIGHTED
         auto m = f.updateAtomic(i, ngh);
@@ -167,6 +190,7 @@ namespace decode_uncompressed {
   // TODO(laxmand): Add support for weighted graphs.
   template <class V, class Pred>
   inline size_t packOutNgh(V* v, long vtx_id, Pred& p, bool* bits, uintE* tmp) {
+    std::cout << "packOutNgh" << std::endl;
     uintE d = v->getOutDegree();
     if (d < 5000) {
       size_t k = 0;
@@ -194,6 +218,7 @@ namespace decode_uncompressed {
 }
 
 struct symmetricVertex {
+  long accesses = 0; // debug
 #ifndef WEIGHTED
   uintE* neighbors;
 #else
@@ -208,12 +233,20 @@ symmetricVertex(intE* n, uintT d)
 #endif
 : neighbors(n), degree(d) {}
 #ifndef WEIGHTED
-  uintE* getInNeighbors () { return neighbors; }
-  const uintE* getInNeighbors () const { return neighbors; }
+  uintE* getInNeighbors () {return neighbors; }
   uintE* getOutNeighbors () { return neighbors; }
+
+#ifndef DEBUG//?
+  const uintE* getInNeighbors () const { return neighbors; }
   const uintE* getOutNeighbors () const { return neighbors; }
-  uintE getInNeighbor(uintT j) const { return neighbors[j]; }
-  uintE getOutNeighbor(uintT j) const { return neighbors[j]; }
+#endif
+#ifndef DEBUG
+  uintE getInNeighbor(uintT j) {return neighbors[j];}
+  uintE getOutNeighbor(uintT j) {return neighbors[j];}
+#else
+  uintE getInNeighbor(uintT j, bool increment=false) { if(increment) {accesses++;} return neighbors[j]; }
+  uintE getOutNeighbor(uintT j, bool increment=false) { if(increment) {accesses++;} return neighbors[j]; }
+#endif
 
   void setInNeighbor(uintT j, uintE ngh) { neighbors[j] = ngh; }
   void setOutNeighbor(uintT j, uintE ngh) { neighbors[j] = ngh; }
@@ -282,6 +315,7 @@ symmetricVertex(intE* n, uintT d)
 };
 
 struct asymmetricVertex {
+  long accesses = 0; // debug
 #ifndef WEIGHTED
   uintE* inNeighbors, *outNeighbors;
 #else
@@ -301,8 +335,13 @@ asymmetricVertex(intE* iN, intE* oN, uintT id, uintT od)
   const uintE* getInNeighbors () const { return inNeighbors; }
   uintE* getOutNeighbors () { return outNeighbors; }
   const uintE* getOutNeighbors () const { return outNeighbors; }
+#ifndef DEBUG
   uintE getInNeighbor(uintT j) const { return inNeighbors[j]; }
   uintE getOutNeighbor(uintT j) const { return outNeighbors[j]; }
+#else
+  uintE getInNeighbor(uintT j, bool increment=false) { if(increment) {accesses++;} return inNeighbors[j]; }
+  uintE getOutNeighbor(uintT j, bool increment=false) { if(increment) {accesses++;} return outNeighbors[j]; }
+#endif
   void setInNeighbor(uintT j, uintE ngh) { inNeighbors[j] = ngh; }
   void setOutNeighbor(uintT j, uintE ngh) { outNeighbors[j] = ngh; }
   void setInNeighbors(uintE* _i) { inNeighbors = _i; }

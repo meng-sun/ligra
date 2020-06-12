@@ -25,17 +25,18 @@ public:
   vertex* V;
   long n;
   long m;
-  void* allocatedInplace, * inEdges;
+  void* allocatedInplace;
+  void* inEdges;
 
   Uncompressed_Mem(vertex* VV, long nn, long mm, void* ai, void* _inEdges = NULL)
-  : V(VV), n(nn), m(mm), allocatedInplace(ai), inEdges(_inEdges) { }
+  : V(VV), n(nn), m(mm), allocatedInplace(ai), inEdges(_inEdges) {}
 
   void del() {
-    if (allocatedInplace == NULL)
+    if (allocatedInplace == NULL){
       for (long i=0; i < n; i++) V[i].del();
-    else free(allocatedInplace);
+    } else free(allocatedInplace);
     free(V);
-    if(inEdges != NULL) free(inEdges);
+    if(inEdges != NULL) {free(inEdges);}
   }
 };
 
@@ -97,6 +98,11 @@ public:
 
 template <class vertex>
 struct graph {
+
+// just for debugging
+  long dram_accesses = 0;
+  long nvram_accesses = 0;
+
   vertex *V;
   long n;
   long m;
@@ -154,7 +160,7 @@ hypergraph(vertex* _V, vertex* _H, long _nv, long _mv, long _nh, long _mh,  Dele
     flags = newA(uintE,max(nv,nh));
     parallel_for(long i=0;i<max(nv,nh);i++) flags[i]=UINT_E_MAX;
   }
-  
+
   void transpose() {
     if ((sizeof(vertex) == sizeof(asymmetricVertex)) ||
         (sizeof(vertex) == sizeof(compressedAsymmetricVertex))) {

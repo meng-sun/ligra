@@ -1,5 +1,5 @@
 // This code is part of the project "Ligra: A Lightweight Graph Processing
-// Framework for Shared Memory", presented at Principles and Practice of 
+// Framework for Shared Memory", presented at Principles and Practice of
 // Parallel Programming, 2013.
 // Copyright (c) 2013 Julian Shun and Guy Blelloch
 //
@@ -21,12 +21,17 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+#define DEBUG 1
 #include "ligra.h"
+
+//delete this included for debug purposes
+#include <bitset>
 
 //atomically do bitwise-OR of *a with b and store in location a
 template <class ET>
 inline void writeOr(ET *a, ET b) {
-  volatile ET newV, oldV; 
+  volatile ET newV, oldV;
   do {oldV = *a; newV = oldV | b;}
   while ((oldV != newV) && !CAS(a, oldV, newV));
 }
@@ -35,10 +40,15 @@ struct Radii_F {
   intE round;
   intE* radii;
   long* Visited, *NextVisited;
-  Radii_F(long* _Visited, long* _NextVisited, intE* _radii, intE _round) : 
-    Visited(_Visited), NextVisited(_NextVisited), radii(_radii), round(_round) 
+  Radii_F(long* _Visited, long* _NextVisited, intE* _radii, intE _round) :
+    Visited(_Visited), NextVisited(_NextVisited), radii(_radii), round(_round)
   {}
   inline bool update (uintE s, uintE d){ //Update function does a bitwise-or
+
+    std::bitset<64> vd(Visited[d]);
+    std::bitset<64> vs(Visited[s]);
+    std::cout << "visited d " << d << " " << vd << " : " << "... s " << s << " " << vs << std::endl;
+
     long toWrite = Visited[d] | Visited[s];
     if(Visited[d] != toWrite){
       NextVisited[d] |= toWrite;
@@ -80,12 +90,14 @@ void Compute(graph<vertex>& GA, commandLine P) {
     }}
   long sampleSize = min(n,(long)64);
   uintE* starts = newA(uintE,sampleSize);
-  
+
   {parallel_for(ulong i=0;i<sampleSize;i++) { //initial set of vertices
       uintE v = hashInt(i) % n;
     radii[v] = 0;
     starts[i] = v;
     NextVisited[v] = (long) 1<<i;
+    std::bitset<64> nv(NextVisited[v]);
+    std::cout << "v visited starts " << v << " " << nv << " " << i << std::endl;
     }}
 
   vertexSubset Frontier(n,sampleSize,starts); //initial frontier of size 64
@@ -98,5 +110,5 @@ void Compute(graph<vertex>& GA, commandLine P) {
     Frontier.del();
     Frontier = output;
   }
-  free(Visited); free(NextVisited); Frontier.del(); free(radii); 
+  free(Visited); free(NextVisited); Frontier.del(); free(radii);
 }

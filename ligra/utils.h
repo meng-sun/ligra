@@ -332,7 +332,7 @@ inline void writeAdd(ET *a, ET b) {
 }
 
 inline long xaddl(long *variable, long value) {
-   asm volatile( 
+   asm volatile(
 		"lock; xaddl %%eax, %2;"
 		:"=a" (value)                   //Output
 		: "a" (value), "m" (*variable)  //Input
@@ -341,7 +341,7 @@ inline long xaddl(long *variable, long value) {
 }
 
 inline int xaddi(int *variable, int value) {
-   asm volatile( 
+   asm volatile(
 		"lock; xadd %%eax, %2;"
 		:"=a" (value)                   //Output
 		: "a" (value), "m" (*variable)  //Input

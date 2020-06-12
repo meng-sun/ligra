@@ -21,6 +21,8 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+//#define DEBUG 0
 #include "ligra.h"
 
 struct BFS_F {
@@ -36,7 +38,8 @@ struct BFS_F {
     return (CAS(&Parents[d],UINT_E_MAX,s));
   }
   //cond function checks if vertex has been visited yet
-  inline bool cond (uintE d) { return (Parents[d] == UINT_E_MAX); }
+  inline bool cond (uintE d) { //std::cerr << "cond | " << d << std::endl;
+    return (Parents[d] == UINT_E_MAX); }
 };
 
 template <class vertex>
@@ -48,13 +51,16 @@ void Compute(graph<vertex>& GA, commandLine P) {
   parallel_for(long i=0;i<n;i++) Parents[i] = UINT_E_MAX;
   Parents[start] = start;
   vertexSubset Frontier(n,start); //creates initial frontier
+
   while(!Frontier.isEmpty()){ //loop until frontier is empty
-    //for (int i=0; i<n; i++) std::cout << "VF| " << Frontier.s[i] << std::endl;
     vertexSubset output = edgeMap(GA, Frontier, BFS_F(Parents));
+    //std::cout << "Frontier sz " << output.size() << std::endl;
+    if (output.dense()) output.toSparse();
+    //for (int i=0; i<output.size(); i++) std::cout << "VF| " << output.vtx(i) << std::endl;
     //Frontier.del();
     Frontier = output; //set new frontier
   }
-  //std::cout << "done" << std::endl;
+
   Frontier.del();
   free(Parents);
 }

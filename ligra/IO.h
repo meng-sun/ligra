@@ -64,6 +64,7 @@ struct pairBothCmp {
   }
 };
 
+/*
 // A structure that keeps a sequence of strings all allocated from
 // the same block of memory
 struct words {
@@ -76,6 +77,7 @@ words(char* C, long nn, char** S, long mm)
 : Chars(C), n(nn), Strings(S), m(mm) {}
   void del() {free(Chars); free(Strings);}
 };
+*/
 
 inline bool isSpace(char c) {
   switch (c)  {
@@ -165,8 +167,23 @@ words stringToWords(char *Str, long n) {
   return words(Str,n,SA,m);
 }
 
+//------------
+size_t binarySearch(uintT * a, size_t low, size_t high, size_t m) {
+  if (high >= low) {
+    size_t mid = low + (high - low) / 2;
+    if (a[mid] == m)
+      return mid;
+    if(a[mid] > m)
+      return binarySearch(a, low, mid - 1, m);
+    return binarySearch(a, mid + 1, high, m);
+  }
+  return low-1;
+}
+//------------
+
 template <class vertex>
-graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
+graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap,\
+    long capacity=0, char* npf=nullptr, bool rmetis=false) {
   words W;
   if (mmap) {
     _seq<char> S = mmapStringFromFile(fname);
@@ -190,7 +207,7 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
 #else
   if (W.Strings[0] != (string) "WeightedAdjacencyGraph") {
 #endif
-    cout << "Bad input file" << endl;
+    cout << "Bad input file l0" << endl;
     abort();
   }
 
@@ -202,7 +219,7 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
 #else
   if (len != n + 2*m + 2) {
 #endif
-    cout << "Bad input file" << endl;
+    cout << "Bad input file count" << endl;
     abort();
   }
 
@@ -213,7 +230,7 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
   size_t mapped_len;
   ifstream f(path.c_str());
 
-  const static size_t PMEMGRAPHSIZE = 10240000;
+  const static size_t PMEMGRAPHSIZE = 100000000000;
 
   if (f.good()) {
     pmemaddr = (char*)pmem_map_file(path.c_str(), PMEMGRAPHSIZE,
@@ -253,19 +270,81 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
 
   {parallel_for(long i=0; i < n; i++) offsets[i] = atol(W.Strings[i + 3]);}
 
-  NodePartitioner np(n, m, offsets, m);
+  NodePartitioner* np;
+  uintT* tOffsets = newA(uintE, n);
+  memset(tOffsets,0,n*sizeof(uintT));
+  if (npf != nullptr) {
+    _seq<char> dn = readStringFromFile(npf);
+    words dnw = stringToWords(dn.A, dn.n);
+    //std::cerr << "got to this point: dn | " << dn.n << " " << (bool) dn.A[0] << std::endl;
+    np = new NodePartitioner(n, m, offsets, dnw, rmetis);
+
+    //for (size_t i = 0; i<n; i++)
+    //  std::cout << "NP| " << i << " " << np->dram_nodes[i] << " " << np->if_dram(i) << " : " << np->partition_offset(i) << std::endl;
+  } else if (!isSymmetric) {
+    parallel_for(int i=0; i<m; i++) {
+      writeAdd(&tOffsets[atol(W.Strings[i+n+3])],(uintT)1);
+    }
+
+    np = new NodePartitioner(n,m,offsets, tOffsets, capacity);
+    long collect_sum = 0;
+    for(int i=0; i<n; i++) {
+      long tmp = collect_sum;
+      collect_sum += tOffsets[i];
+      tOffsets[i] = tmp;
+    }
+  } else {
+    np = new NodePartitioner(n, m, offsets, capacity);
+  }
+
+  //for debugging
+  size_t edge_count =0;
+  size_t node_count =0;
+  for (size_t i=0; i<n; i++) {
+    if (np->if_dram(i)) {
+      edge_count += ((i == n-1) ? m : offsets[i+1])-offsets[i];
+      node_count++;
+    }
+  }
+  if (isSymmetric) {
+    std::cout << "Percent of all nodes on dram: " << node_count << "/" << n << std::endl;
+    std::cout << "Percent of all edges on dram: " << edge_count << "/" << m << std::endl;
+  } else {
+
+    for (size_t i=0; i<n; i++) {
+      if (np->if_dram(i+n)) {
+        edge_count += ((i == n-1) ? m : tOffsets[i+1])-tOffsets[i];
+        node_count++;
+      }
+    }
+    std::cout << "Percent of all nodes on dram: " << node_count << "/" << 2*n << std::endl;
+    std::cout << "Percent of all edges on dram: " << edge_count << "/" << 2*m << std::endl;
+
+  }
+
   //for (size_t i = 0; i<n; i++)
- //   std::cout << "NP| " << np.if_dram(i) << " : " << np.partition_offset(i) << std::endl;
+  //  std::cout << "NP| " << i << " " << np->if_dram(i) << " : " << np->partition_offset(i) << std::endl;
+  //  why not marked as volatile???
+  uintT dram_partition_split = 0;
 
   {parallel_for(long i=0; i<m; i++) {
 #ifndef WEIGHTED
                                       // holes
-    size_t j=0;
-    while(i > offsets[j]) j++;
-    if (np.if_dram(j)) {
-      edges[i] = atol(W.Strings[i+n+3]);
+  //size_t binary_search(Sequence I, typename Sequence::T v, const F& less) {
+    size_t j = binarySearch(offsets, 0, n-1, i);
+    //while(i > offsets[j]) j++;
+    uintT po = np->partition_offset(j);
+    uintT l = ((j == n-1) ? m : offsets[j+1])-offsets[j];
+    if (np->if_dram(j)) {
+      edges[po + (i - offsets[j])] = atol(W.Strings[i+n+3]);
+      //std::cerr << "writing edges | n " << j << " m:" << i << " d " << W.Strings[i+n+3] \
+      //  << " poff: " << np->partition_offset(j) + (i - offsets[j])<< std::endl;
+      pbbs::write_min(&dram_partition_split, po+l, std::greater<uintT>());
+      //std::cout << "dram partition split new | " << dram_partition_split << " = " << po << "+" << l << std::endl;
     } else {
-      nv[i] = atol(W.Strings[i+n+3]);
+      //std::cerr << "writing nv edges |n " << j << " m:" << i << " d " << W.Strings[i+n+3] \
+      //  << " poff: " << np->partition_offset(j) + (i - offsets[j]) << std::endl;
+      nv[po + (i - offsets[j])] = atol(W.Strings[i+n+3]);
     }
 #else
       edges[2*i] = atol(W.Strings[i+n+3]);
@@ -274,6 +353,9 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
     }}
   //W.del(); // to deal with performance bug in malloc
 
+  //for(size_t i=0;i<2*m;i++) std::cout << "edges check " << edges[i] << " a:" << &edges[i] << std::endl;
+  //for(size_t i=0;i<2*m;i++) std::cout << "nv edges check " << nv[i] << " a:" << &nv[i] << std::endl;
+
   vertex* v = newA(vertex,n);
 
   {parallel_for (uintT i=0; i < n; i++) {
@@ -281,21 +363,35 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
     uintT l = ((i == n-1) ? m : offsets[i+1])-offsets[i];
     v[i].setOutDegree(l);
 #ifndef WEIGHTED
-    if (np.if_dram(i)) {
-      v[i].setOutNeighbors(edges+o);
-      //std::cout << "setOutNgD| " << i << " | " << np.partition_offset(i) << std::endl;
-    } else {
-      v[i].setOutNeighbors(nv+o);
-      //std::cout << "setOutNgN| " << i << " | " << np.partition_offset(i) << std::endl;
-    }
+   if (np->if_dram(i)) {
+      v[i].setOutNeighbors(edges+np->partition_offset(i));
+      // TODO fix the offsets or array of pointer problem
+      //if (pmem_is_pmem(edges+o, l*sizeof(uintE))) { std::cerr << "pmem when its not" << i << " " << (void*)(edges+o) << std::endl; }
+      //std::cout << "added out neighbor dram| " << i << " " << np->partition_offset(i) << std::endl;
+      //if (i<5) std::cout << "first outNeighbor dram| " << i << " " << v[i].getOutNeighbor(0) << std::endl;
+   } else {
+      v[i].setOutNeighbors(nv+np->partition_offset(i));
+      //if (!pmem_is_pmem(nv+o, l*sizeof(uintE))) { std::cerr << "not pmem " << i << " " << (void*)(nv+o) << std::endl; }
+      //std::cout << "added out neighbor nvram| " << i << " " << np->partition_offset(i) << std::endl;
+      //if (i<5) std::cout << "first outNeighbor nvram| " << i << " " << v[i].getOutNeighbor(0) << std::endl;
+   }
 #else
     v[i].setOutNeighbors(edges+2*o);
 #endif
     }}
 
+  //for(size_t i=0;i<2*m;i++) std::cout << "edges check " << edges[i] << " a:" << &edges[i] << std::endl;
+  //for(size_t i=0;i<2*m;i++) std::cout << "nv edges check " << nv[i] << " a:" << &nv[i] << std::endl;
+  //for (size_t i=0; i<n; i++) {
+  //  for (size_t j=0; j<v[i].getOutDegree(); j++)
+  //    std::cout << "outneighbors check " << i << "-" << j << " : " << v[i].getOutNeighbor(j) << " a:" << v[i].getOutNeighbor(j) << std::endl;
+  //}
+
   if(!isSymmetric) {
-    uintT* tOffsets = newA(uintT,n);
-    {parallel_for(long i=0;i<n;i++) tOffsets[i] = INT_T_MAX;}
+    // this should all be moved to nvram
+    // rn it doesnt matter that its on dram but it should be nvram
+    //uintT* tOffsets = newA(uintT,n);
+    //{parallel_for(long i=0;i<n;i++) tOffsets[i] = INT_T_MAX;}
 #ifndef WEIGHTED
     intPair* temp = newA(intPair,m);
 #else
@@ -306,6 +402,7 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
       for(uintT j=0;j<v[i].getOutDegree();j++){
 #ifndef WEIGHTED
 	temp[o+j] = make_pair(v[i].getOutNeighbor(j),i);
+  //std::cout << "temp init " << j << " : " << v[i].getOutNeighbor(j) << ", " << i << std::endl;
 #else
 	temp[o+j] = make_pair(v[i].getOutNeighbor(j),make_pair(i,v[i].getOutWeight(j)));
 #endif
@@ -327,50 +424,83 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap) {
 #endif
 #endif
 
-    tOffsets[temp[0].first] = 0;
+    //tOffsets[temp[0].first] = 0;
 #ifndef WEIGHTED
     uintE* inEdges = newA(uintE,m);
-    inEdges[0] = temp[0].second;
+    //inEdges[0] = temp[0].second;
 
     //uintE* niv = alc.allocate(m);
 
     //uintE* niv = bufaddr + m + 2;
     //niv[0] = temp[0].second;
+    //for(size_t i=0;i<m;i++) std::cout << "edges check " << inEdges[i] << " a:" << &(inEdges[i]) << std::endl;
 #else
     intE* inEdges = newA(intE,2*m);
     inEdges[0] = temp[0].second.first;
     inEdges[1] = temp[0].second.second;
 #endif
-    {parallel_for(long i=1;i<m;i++) {
+    //for (size_t i=0; i<m; i++) std::cout << "temp " << temp[i].first << " " << temp[i].second << std::endl;
+    //std::cout << "dram_partition_split " << dram_partition_split << std::endl;
+    {parallel_for(long i=0;i<m;i++) { //
 #ifndef WEIGHTED
-      inEdges[i] = temp[i].second;
+      size_t j = temp[i].first;
+      if (np->if_dram(j+n)) {
+        inEdges[np->partition_offset(j+n) + (i - tOffsets[j]) - dram_partition_split] = temp[i].second;
+        //std::cerr << "writing edges | n " << j << " m:" << i << " d " << temp[i].second \
+        //  << " poff: " << np->partition_offset(j+n) + (i - tOffsets[j]) - dram_partition_split << std::endl;
+      } else {
+        //std::cerr << "writing nv edges |n " << j << " m:" << i << " d " << temp[i].second \
+        //  << " poff: " << np->partition_offset(j+n) + (i - tOffsets[j]) << std::endl;
+        nv[np->partition_offset(j+n) + (i - tOffsets[j])] = temp[i].second;
+      }
+      //inEdges[i] = temp[i].second;
       //niv[i] = temp[i].second;
 #else
       inEdges[2*i] = temp[i].second.first;
       inEdges[2*i+1] = temp[i].second.second;
 #endif
-      if(temp[i].first != temp[i-1].first) {
-	tOffsets[temp[i].first] = i;
-      }
+      //if(temp[i].first != temp[i-1].first) {
+	    //  tOffsets[temp[i].first] = i;
+      //}
       }}
 
     free(temp);
 
     //fill in offsets of degree 0 vertices by taking closest non-zero
     //offset to the right
-    sequence::scanIBack(tOffsets,tOffsets,n,minF<uintT>(),(uintT)m);
+    //sequence::scanIBack(tOffsets,tOffsets,n,minF<uintT>(),(uintT)m);
 
+    // why cant I run this with one thread?
     {parallel_for(long i=0;i<n;i++){
       uintT o = tOffsets[i];
       uintT l = ((i == n-1) ? m : tOffsets[i+1])-tOffsets[i];
+      //std::cout << "tOffsets " << i << ":" << l << std::endl;
       v[i].setInDegree(l);
 #ifndef WEIGHTED
-      v[i].setInNeighbors(inEdges+o);
+      //v[i].setInNeighbors(inEdges+o);
       //v[i].setInNeighbors(niv+o);
+     if (np->if_dram(i+n)) {
+        v[i].setInNeighbors(inEdges+np->partition_offset(i+n)-dram_partition_split);
+        // TODO fix the offsets or array of pointer problem
+        //if (pmem_is_pmem(edges+o, l*sizeof(uintE))) { std::cerr << "pmem when its not" << i << " " << (void*)(edges+o) << std::endl; }
+        //std::cout << "added in neighbor dram| " << i << " " << np->partition_offset(i+n)-dram_partition_split << std::endl;
+        //if (i<5) std::cout << "first outNeighbor dram| " << i << " " << v[i].getOutNeighbor(0) << std::endl;
+     } else {
+        v[i].setInNeighbors(nv+np->partition_offset(i+n));
+        //if (!pmem_is_pmem(nv+o, l*sizeof(uintE))) { std::cerr << "not pmem " << i << " " << (void*)(nv+o) << std::endl; }
+        //std::cout << "added in neighbor nvram| " << i << " " << np->partition_offset(i+n) << std::endl;
+        //if (i<5) std::cout << "first outNeighbor nvram| " << i << " " << v[i].getOutNeighbor(0) << std::endl;
+     }
 #else
       v[i].setInNeighbors(inEdges+2*o);
 #endif
       }}
+  //for(size_t i=0;i<m;i++) std::cout << "edges check " << inEdges[i] << " a:" << &(inEdges[i]) << std::endl;
+  //for(size_t i=0;i<2*m;i++) std::cout << "nv edges check " << nv[i] << " a:" << &nv[i] << std::endl;
+  //for (size_t i=0; i<n; i++) {
+  //  for (size_t j=0; j<v[i].getInDegree(); j++)
+  //    std::cout << "inneighbors check " << i << "-" << j << " : " << v[i].getInNeighbor(j) << std::endl;
+  //}
     free(tOffsets);
     Uncompressed_Mem<vertex>* mem = new Uncompressed_Mem<vertex>(v,n,m,edges,inEdges);
     return graph<vertex>(v,n,m,mem);
@@ -534,9 +664,10 @@ graph<vertex> readGraphFromBinary(char* iFile, bool isSymmetric) {
 }
 
 template <class vertex>
-graph<vertex> readGraph(char* iFile, bool compressed, bool symmetric, bool binary, bool mmap) {
+graph<vertex> readGraph(char* iFile, bool compressed, bool symmetric, bool binary, \
+    bool mmap, long capacity=0, char* npf=nullptr, bool rmetis=false) {
   if(binary) return readGraphFromBinary<vertex>(iFile,symmetric);
-  else return readGraphFromFile<vertex>(iFile,symmetric,mmap);
+  else return readGraphFromFile<vertex>(iFile,symmetric,mmap,capacity, npf, rmetis);
 }
 
 template <class vertex>
