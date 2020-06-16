@@ -1,7 +1,7 @@
 #ifndef VERTEX_H
 #define VERTEX_H
 #include "vertexSubset.h"
-#include <libpmem.h>
+//#include <libpmem.h>
 using namespace std;
 
 namespace decode_uncompressed {
