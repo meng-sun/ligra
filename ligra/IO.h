@@ -277,11 +277,27 @@ graph<vertex> readGraphFromFile(char* fname, bool isSymmetric, bool mmap,\
     _seq<char> dn = readStringFromFile(npf);
     words dnw = stringToWords(dn.A, dn.n);
     //std::cerr << "got to this point: dn | " << dn.n << " " << (bool) dn.A[0] << std::endl;
-    np = new NodePartitioner(n, m, offsets, dnw, rmetis);
 
     //for (size_t i = 0; i<n; i++)
     //  std::cout << "NP| " << i << " " << np->dram_nodes[i] << " " << np->if_dram(i) << " : " << np->partition_offset(i) << std::endl;
-  } else if (!isSymmetric) {
+    if (!isSymmetric) {
+      parallel_for(int i=0; i<m; i++) {
+        writeAdd(&tOffsets[atol(W.Strings[i+n+3])],(uintT)1);
+      }
+
+      np = new NodePartitioner(n,m,offsets, tOffsets, dnw, rmetis);
+      long collect_sum = 0;
+      for(int i=0; i<n; i++) {
+        long tmp = collect_sum;
+        collect_sum += tOffsets[i];
+        tOffsets[i] = tmp;
+      }
+    } else {
+      np = new NodePartitioner(n, m, offsets, dnw, rmetis);
+    }
+  }
+
+  if (!isSymmetric) {
     parallel_for(int i=0; i<m; i++) {
       writeAdd(&tOffsets[atol(W.Strings[i+n+3])],(uintT)1);
     }
