@@ -22,7 +22,7 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-#define DEBUG 1
+//#define DEBUG 1
 #include "ligra.h"
 
 //delete this included for debug purposes
@@ -97,7 +97,6 @@ void Compute(graph<vertex>& GA, commandLine P) {
     starts[i] = v;
     NextVisited[v] = (long) 1<<i;
     std::bitset<64> nv(NextVisited[v]);
-    std::cout << "v visited starts " << v << " " << nv << " " << i << std::endl;
     }}
 
   vertexSubset Frontier(n,sampleSize,starts); //initial frontier of size 64
