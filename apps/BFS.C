@@ -38,7 +38,8 @@ struct BFS_F {
     return (CAS(&Parents[d],UINT_E_MAX,s));
   }
   //cond function checks if vertex has been visited yet
-  inline bool cond (uintE d) { //std::cerr << "cond | " << d << std::endl;
+  inline bool cond (uintE d) {
+    //std::cerr << "cond | " << d << std::endl;
     return (Parents[d] == UINT_E_MAX); }
 };
 

@@ -16,6 +16,7 @@ namespace decode_uncompressed {
     //std::cerr << "decodeInNghBreakEarly" << std::endl;
     if (!parallel || d < 1000) {
       for (size_t j=0; j<d; j++) {
+        //std::cerr << "accessing " << v_id << "'s in neighbor " << j+1 << "/" << d << std::endl;
 #ifndef DEBUG
         uintE ngh = v->getInNeighbor(j);
 #else
@@ -190,7 +191,7 @@ namespace decode_uncompressed {
   // TODO(laxmand): Add support for weighted graphs.
   template <class V, class Pred>
   inline size_t packOutNgh(V* v, long vtx_id, Pred& p, bool* bits, uintE* tmp) {
-    std::cout << "packOutNgh" << std::endl;
+    //std::cout << "packOutNgh" << std::endl;
     uintE d = v->getOutDegree();
     if (d < 5000) {
       size_t k = 0;

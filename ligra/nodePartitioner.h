@@ -2,6 +2,7 @@
 #define NODE_PARTITIONER
 #include "words.h"
 #include "parallel.h"
+#include <cassert>
 class NodePartitioner{
 
   uintE* partition_offsets;
@@ -40,16 +41,21 @@ NodePartitioner::NodePartitioner(size_t n, size_t m, uintE* o,\
   dram_nodes = newA(bool, n);
   memset(dram_nodes, false, n);
 
+  assert(dn.m == n);
+  std::cout << "Using metis partitioning...\n";
   if (rmetis) {
     parallel_for(long i=0; i<n; i++) {
       if (dn.Strings[i] != (string) "1") dram_nodes[i] = true;
     }
   } else {
     parallel_for(long i=0; i<n; i++) {
+      //std::cout << "i " << i << ": " << dn.Strings[i] << "\n";
       if (dn.Strings[i] == (string) "1") dram_nodes[i] = true;
+      //std::cout << "dram i " << i << ": " << dram_nodes[i] << "\n";
     }
   }
 
+  std::cout << "Counting partition offsets...\n";
   partition_offsets = newA(uintE, n);
   uintE dram_count = 0;
   uintE other_count = 0;
@@ -75,7 +81,10 @@ NodePartitioner::NodePartitioner(size_t n, size_t m, uintE* o,\
   memset(dram_nodes, false, 2*n);
   partition_offsets = newA(uintE, 2*n);
 
+  std::cout << "Using metis partitioning...\n";
   std::cout << "Using asymmetric graph..." << std::endl;
+
+  assert(dn.m == n);
 
   if (rmetis) {
     parallel_for(long i=0; i<n; i++) {
@@ -86,12 +95,17 @@ NodePartitioner::NodePartitioner(size_t n, size_t m, uintE* o,\
     }
   } else {
     parallel_for(long i=0; i<n; i++) {
+      //std::cout << "n " << i << " ";
       if (dn.Strings[i] == (string) "1") {
+      //std::cout << "string " ;
         dram_nodes[i] = true;
+      //std::cout << "i " ;
         dram_nodes[i+n] = true;
       }
     }
   }
+
+  std::cout << "done dram nodes\n";
 
   uintE dram_count = 0;
   uintE other_count = 0;
@@ -106,6 +120,8 @@ NodePartitioner::NodePartitioner(size_t n, size_t m, uintE* o,\
       other_count += ((i == n-1) ? m : o[i+1])-o[i];
     }
   }
+
+  std::cout << "done outgoing partition offsets\n";
   for (size_t i=0; i<n; i++) {
     if (dram_nodes[i]) {
       partition_offsets[i+n] = dram_count;
@@ -119,7 +135,7 @@ NodePartitioner::NodePartitioner(size_t n, size_t m, uintE* o,\
   //for (size_t i=0; i<_n; i++)
   //  std::cout <<"dram node pre |" << dram_nodes[i] << std::endl;
   std::cout << "created node partitioner from file" << std::endl;
-  
+
 }
 
 NodePartitioner::NodePartitioner(size_t n, size_t m, uintE* o, size_t capacity) {
