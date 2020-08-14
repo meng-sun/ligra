@@ -22,44 +22,48 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-//#define DEBUG 0
+#include "flags.h"
 #include "ligra.h"
 
 struct BFS_F {
   uintE* Parents;
   BFS_F(uintE* _Parents) : Parents(_Parents) {}
-  inline bool update (uintE s, uintE d) { //Update
-    //std::cout << "BFS| " << s << " -> " << d << std::endl;
-    if(Parents[d] == UINT_E_MAX) { Parents[d] = s; return 1; }
-    else return 0;
+  inline bool update(uintE s, uintE d) {  // Update
+    // std::cout << "BFS| " << s << " -> " << d << std::endl;
+    if (Parents[d] == UINT_E_MAX) {
+      Parents[d] = s;
+      return 1;
+    } else
+      return 0;
   }
-  inline bool updateAtomic (uintE s, uintE d){ //atomic version of Update
-    //std::cout << "atomic BFS| " << s << " -> " << d << std::endl;
-    return (CAS(&Parents[d],UINT_E_MAX,s));
+  inline bool updateAtomic(uintE s, uintE d) {  // atomic version of Update
+    // std::cout << "atomic BFS| " << s << " -> " << d << std::endl;
+    return (CAS(&Parents[d], UINT_E_MAX, s));
   }
-  //cond function checks if vertex has been visited yet
-  inline bool cond (uintE d) {
-    //std::cerr << "cond | " << d << std::endl;
-    return (Parents[d] == UINT_E_MAX); }
+  // cond function checks if vertex has been visited yet
+  inline bool cond(uintE d) {
+    // std::cerr << "cond | " << d << std::endl;
+    return (Parents[d] == UINT_E_MAX);
+  }
 };
 
 template <class vertex>
 void Compute(graph<vertex>& GA, commandLine P) {
-  long start = P.getOptionLongValue("-r",0);
+  long start = P.getOptionLongValue("-r", 0);
   long n = GA.n;
-  //creates Parents array, initialized to all -1, except for start
-  uintE* Parents = newA(uintE,n);
-  parallel_for(long i=0;i<n;i++) Parents[i] = UINT_E_MAX;
+  // creates Parents array, initialized to all -1, except for start
+  uintE* Parents = newA(uintE, n);
+  parallel_for(long i = 0; i < n; i++) Parents[i] = UINT_E_MAX;
   Parents[start] = start;
-  vertexSubset Frontier(n,start); //creates initial frontier
+  vertexSubset Frontier(n, start);  // creates initial frontier
 
-  while(!Frontier.isEmpty()){ //loop until frontier is empty
+  while (!Frontier.isEmpty()) {  // loop until frontier is empty
     vertexSubset output = edgeMap(GA, Frontier, BFS_F(Parents));
-    //std::cout << "Frontier sz " << output.size() << std::endl;
+    // std::cout << "Frontier sz " << output.size() << std::endl;
     if (output.dense()) output.toSparse();
-    //for (int i=0; i<output.size(); i++) std::cout << "VF| " << output.vtx(i) << std::endl;
-    //Frontier.del();
-    Frontier = output; //set new frontier
+    // for (int i=0; i<output.size(); i++) std::cout << "VF| " << output.vtx(i)
+    // << std::endl; Frontier.del();
+    Frontier = output;  // set new frontier
   }
 
   Frontier.del();

@@ -21,6 +21,7 @@
 // LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+// clang-format off
 #ifndef LIGRA_H
 #define LIGRA_H
 #include <iostream>
@@ -40,6 +41,8 @@
 #include "parseCommandLine.h"
 #include "index_map.h"
 #include "edgeMap_utils.h"
+
+// clang-format on
 using namespace std;
 
 //*****START FRAMEWORK*****
@@ -56,15 +59,18 @@ const flags edge_parallel = 128;
 inline bool should_output(const flags& fl) { return !(fl & no_output); }
 
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapDense(graph<vertex> GA, VS& vertexSubset, F &f, const flags fl) {
-  //std::cerr << "edgeMapDense" << std::endl;
+vertexSubsetData<data> edgeMapDense(graph<vertex> GA, VS& vertexSubset, F& f,
+                                    const flags fl) {
+#ifdef ERRMSG
+  std::cerr << "edgeMapDense" << std::endl;
+#endif
   using D = tuple<bool, data>;
   long n = GA.n;
-  vertex *G = GA.V;
+  vertex* G = GA.V;
   if (should_output(fl)) {
     D* next = newA(D, n);
     auto g = get_emdense_gen<data>(next);
-    parallel_for (long v=0; v<n; v++) {
+    parallel_for(long v = 0; v < n; v++) {
       std::get<0>(next[v]) = 0;
       if (f.cond(v)) {
         G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
@@ -73,7 +79,7 @@ vertexSubsetData<data> edgeMapDense(graph<vertex> GA, VS& vertexSubset, F &f, co
     return vertexSubsetData<data>(n, next);
   } else {
     auto g = get_emdense_nooutput_gen<data>();
-    parallel_for (long v=0; v<n; v++) {
+    parallel_for(long v = 0; v < n; v++) {
       if (f.cond(v)) {
         G[v].decodeInNghBreakEarly(v, vertexSubset, f, g, fl & dense_parallel);
       }
@@ -83,16 +89,19 @@ vertexSubsetData<data> edgeMapDense(graph<vertex> GA, VS& vertexSubset, F &f, co
 }
 
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapDenseForward(graph<vertex> GA, VS& vertexSubset, F &f, const flags fl) {
-  //std::cerr << "edgeMapDenseForward" << std::endl;
+vertexSubsetData<data> edgeMapDenseForward(graph<vertex> GA, VS& vertexSubset,
+                                           F& f, const flags fl) {
+#ifdef ERRMSG
+  std::cerr << "edgeMapDenseForward" << std::endl;
+#endif
   using D = tuple<bool, data>;
   long n = GA.n;
-  vertex *G = GA.V;
+  vertex* G = GA.V;
   if (should_output(fl)) {
     D* next = newA(D, n);
     auto g = get_emdense_forward_gen<data>(next);
-    parallel_for(long i=0;i<n;i++) { std::get<0>(next[i]) = 0; }
-    parallel_for (long i=0; i<n; i++) {
+    parallel_for(long i = 0; i < n; i++) { std::get<0>(next[i]) = 0; }
+    parallel_for(long i = 0; i < n; i++) {
       if (vertexSubset.isIn(i)) {
         G[i].decodeOutNgh(i, f, g);
       }
@@ -100,7 +109,7 @@ vertexSubsetData<data> edgeMapDenseForward(graph<vertex> GA, VS& vertexSubset, F
     return vertexSubsetData<data>(n, next);
   } else {
     auto g = get_emdense_forward_nooutput_gen<data>();
-    parallel_for (long i=0; i<n; i++) {
+    parallel_for(long i = 0; i < n; i++) {
       if (vertexSubset.isIn(i)) {
         G[i].decodeOutNgh(i, f, g);
       }
@@ -110,27 +119,33 @@ vertexSubsetData<data> edgeMapDenseForward(graph<vertex> GA, VS& vertexSubset, F
 }
 
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices, VS& indices,
-        uintT* degrees, uintT m, F &f, const flags fl) {
-  //std::cerr << "edgeMapSparse" << std::endl;
+vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA,
+                                     vertex* frontierVertices, VS& indices,
+                                     uintT* degrees, uintT m, F& f,
+                                     const flags fl) {
+#ifdef ERRMSG
+  std::cerr << "edgeMapSparse" << std::endl;
+#endif
   using S = tuple<uintE, data>;
   long n = indices.n;
   S* outEdges;
   long outEdgeCount = 0;
-  for(long i=0;i<n;i++) { GA.V[i].getOutNeighbors(); }
+  // for (long i = 0; i < n; i++) {
+  //  GA.V[i].getOutNeighbors();  // ? Was this always here before? TODO
+  //}
 
   if (should_output(fl)) {
     uintT* offsets = degrees;
     outEdgeCount = sequence::plusScan(offsets, offsets, m);
     outEdges = newA(S, outEdgeCount);
     auto g = get_emsparse_gen<data>(outEdges);
-    //std::cerr << "N workers: " << __cilkrts_get_nworkers() << std::endl;
-    parallel_for (size_t i = 0; i < m; i++) {
+    // std::cerr << "N workers: " << __cilkrts_get_nworkers() << std::endl;
+    parallel_for(size_t i = 0; i < m; i++) {
       uintT v = indices.vtx(i), o = offsets[i];
-      //std::cerr << __cilkrts_get_worker_number() << "|" << 2.40 << std::endl;
+      // std::cerr << __cilkrts_get_worker_number() << "|" << 2.40 << std::endl;
       vertex vert = frontierVertices[i];
-      //std::cerr << __cilkrts_get_worker_number() << "|" << 2.45 << std::endl;
-      //std::cerr << "edgeMapSparse | " << v << std::endl;
+      // std::cerr << __cilkrts_get_worker_number() << "|" << 2.45 << std::endl;
+      // std::cerr << "edgeMapSparse | " << v << std::endl;
       vert.decodeOutNghSparse(v, o, f, g);
 #ifdef DEBUG
       frontierVertices[i].accesses += vert.accesses;
@@ -138,7 +153,7 @@ vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices
     }
   } else {
     auto g = get_emsparse_nooutput_gen<data>();
-    parallel_for (size_t i = 0; i < m; i++) {
+    parallel_for(size_t i = 0; i < m; i++) {
       uintT v = indices.vtx(i);
       vertex vert = frontierVertices[i];
       vert.decodeOutNghSparse(v, 0, f, g);
@@ -153,27 +168,33 @@ vertexSubsetData<data> edgeMapSparse(graph<vertex>& GA, vertex* frontierVertices
     if (fl & remove_duplicates) {
       if (GA.flags == NULL) {
         GA.flags = newA(uintE, n);
-        parallel_for(long i=0;i<n;i++) { GA.flags[i]=UINT_E_MAX; }
+        parallel_for(long i = 0; i < n; i++) { GA.flags[i] = UINT_E_MAX; }
       }
-      auto get_key = [&] (size_t i) -> uintE& { return std::get<0>(outEdges[i]); };
+      auto get_key = [&](size_t i) -> uintE& {
+        return std::get<0>(outEdges[i]);
+      };
       remDuplicates(get_key, GA.flags, outEdgeCount, n);
     }
-    auto p = [] (tuple<uintE, data>& v) { return std::get<0>(v) != UINT_E_MAX; };
+    auto p = [](tuple<uintE, data>& v) { return std::get<0>(v) != UINT_E_MAX; };
     size_t nextM = pbbs::filterf(outEdges, nextIndices, outEdgeCount, p);
     free(outEdges);
-    //for (size_t i=0; i<outEdgeCount; i++) std::cerr << "nextI| " << std::get<0>(nextIndices[i]) << std::endl;
+    // for (size_t i=0; i<outEdgeCount; i++) std::cerr << "nextI| " <<
+    // std::get<0>(nextIndices[i]) << std::endl;
     return vertexSubsetData<data>(n, nextM, nextIndices);
   } else {
-    //std::cout << "should not output fl" << std::endl;
+    // std::cout << "should not output fl" << std::endl;
     return vertexSubsetData<data>(n);
   }
 }
 
 template <class data, class vertex, class VS, class F>
 vertexSubsetData<data> edgeMapSparse_no_filter(graph<vertex>& GA,
-    vertex* frontierVertices, VS& indices, uintT* offsets, uintT m, F& f,
-    const flags fl) {
-  //std::cerr << "edgeMapDenseSparse_nofilter" << std::endl;
+                                               vertex* frontierVertices,
+                                               VS& indices, uintT* offsets,
+                                               uintT m, F& f, const flags fl) {
+#ifdef ERRMSG
+  std::cerr << "edgeMapSparse_nofilter" << std::endl;
+#endif
   using S = tuple<uintE, data>;
   long n = indices.n;
   long outEdgeCount = sequence::plusScan(offsets, offsets, m);
@@ -185,24 +206,24 @@ vertexSubsetData<data> edgeMapSparse_no_filter(graph<vertex>& GA,
   size_t b_size = 10000;
   size_t n_blocks = nblocks(outEdgeCount, b_size);
 
-  uintE* cts = newA(uintE, n_blocks+1);
-  size_t* block_offs = newA(size_t, n_blocks+1);
+  uintE* cts = newA(uintE, n_blocks + 1);
+  size_t* block_offs = newA(size_t, n_blocks + 1);
 
-  auto offsets_m = make_in_imap<uintT>(m, [&] (size_t i) { return offsets[i]; });
-  auto lt = [] (const uintT& l, const uintT& r) { return l < r; };
-  parallel_for(size_t i=0; i<n_blocks; i++) {
-    size_t s_val = i*b_size;
+  auto offsets_m = make_in_imap<uintT>(m, [&](size_t i) { return offsets[i]; });
+  auto lt = [](const uintT& l, const uintT& r) { return l < r; };
+  parallel_for(size_t i = 0; i < n_blocks; i++) {
+    size_t s_val = i * b_size;
     block_offs[i] = pbbs::binary_search(offsets_m, s_val, lt);
   }
   block_offs[n_blocks] = m;
-  parallel_for (size_t i=0; i<n_blocks; i++) {
-    if ((i == n_blocks-1) || block_offs[i] != block_offs[i+1]) {
+  parallel_for(size_t i = 0; i < n_blocks; i++) {
+    if ((i == n_blocks - 1) || block_offs[i] != block_offs[i + 1]) {
       // start and end are offsets in [m]
       size_t start = block_offs[i];
-      size_t end = block_offs[i+1];
+      size_t end = block_offs[i + 1];
       uintT start_o = offsets[start];
       uintT k = start_o;
-      for (size_t j=start; j<end; j++) {
+      for (size_t j = start; j < end; j++) {
         uintE v = indices.vtx(j);
         size_t num_in = frontierVertices[j].decodeOutNghSparseSeq(v, k, f, g);
         k += num_in;
@@ -218,28 +239,30 @@ vertexSubsetData<data> edgeMapSparse_no_filter(graph<vertex>& GA,
 
   S* out = newA(S, outSize);
 
-  parallel_for (size_t i=0; i<n_blocks; i++) {
-    if ((i == n_blocks-1) || block_offs[i] != block_offs[i+1]) {
+  parallel_for(size_t i = 0; i < n_blocks; i++) {
+    if ((i == n_blocks - 1) || block_offs[i] != block_offs[i + 1]) {
       size_t start = block_offs[i];
       size_t start_o = offsets[start];
       size_t out_off = cts[i];
-      size_t block_size = cts[i+1] - out_off;
-      for (size_t j=0; j<block_size; j++) {
+      size_t block_size = cts[i + 1] - out_off;
+      for (size_t j = 0; j < block_size; j++) {
         out[out_off + j] = outEdges[start_o + j];
       }
     }
   }
-  free(outEdges); free(cts); free(block_offs);
+  free(outEdges);
+  free(cts);
+  free(block_offs);
 
   if (fl & remove_duplicates) {
     if (GA.flags == NULL) {
       GA.flags = newA(uintE, n);
-      parallel_for(size_t i=0;i<n;i++) { GA.flags[i]=UINT_E_MAX; }
+      parallel_for(size_t i = 0; i < n; i++) { GA.flags[i] = UINT_E_MAX; }
     }
-    auto get_key = [&] (size_t i) -> uintE& { return std::get<0>(out[i]); };
+    auto get_key = [&](size_t i) -> uintE& { return std::get<0>(out[i]); };
     remDuplicates(get_key, GA.flags, outSize, n);
     S* nextIndices = newA(S, outSize);
-    auto p = [] (tuple<uintE, data>& v) { return std::get<0>(v) != UINT_E_MAX; };
+    auto p = [](tuple<uintE, data>& v) { return std::get<0>(v) != UINT_E_MAX; };
     size_t nextM = pbbs::filterf(out, nextIndices, outSize, p);
     free(out);
     return vertexSubsetData<data>(n, nextM, nextIndices);
@@ -249,12 +272,17 @@ vertexSubsetData<data> edgeMapSparse_no_filter(graph<vertex>& GA,
 
 // Decides on sparse or dense base on number of nonzeros in the active vertices.
 template <class data, class vertex, class VS, class F>
-vertexSubsetData<data> edgeMapData(graph<vertex>& GA, VS &vs, F f,
-    intT threshold = -1, const flags& fl=0) {
-  //std::cerr << "edgeMapData" << std::endl;
+vertexSubsetData<data> edgeMapData(graph<vertex>& GA, VS& vs, F f,
+                                   intT threshold = -1, const flags& fl = 0) {
+#ifdef ERRMSG
+  std::cerr << "edgeMapData" << std::endl;
+#endif
   long numVertices = GA.n, numEdges = GA.m, m = vs.numNonzeros();
-  if(threshold == -1) threshold = numEdges/20; //default threshold
-  vertex *G = GA.V;
+#ifdef ERRMSG_LV1
+  std::cerr << "edgeMapData-detailed vs.numNonzeros " << m << std::endl;
+#endif
+  if (threshold == -1) threshold = numEdges / 20;  // default threshold
+  vertex* G = GA.V;
   if (numVertices != vs.numRows()) {
     cout << "edgeMap: Sizes Don't match" << endl;
     abort();
@@ -263,58 +291,89 @@ vertexSubsetData<data> edgeMapData(graph<vertex>& GA, VS &vs, F f,
   uintT* degrees = NULL;
   vertex* frontierVertices = NULL;
   uintT outDegrees = 0;
-  if(threshold > 0) { //compute sum of out-degrees if threshold > 0
+  if (threshold > 0) {  // compute sum of out-degrees if threshold > 0
     vs.toSparse();
     degrees = newA(uintT, m);
-    frontierVertices = newA(vertex,m);
-    {parallel_for (size_t i=0; i < m; i++) {
-	uintE v_id = vs.vtx(i);
-	vertex v = G[v_id];
-	degrees[i] = v.getOutDegree();
-	frontierVertices[i] = v;
-  //std::cerr << "edgeMapData | " << v_id << " " << degrees[i] << " " << &v << std::endl;
-  //std::cerr << "getting outNeighbors | ";
-  //for (size_t k=0; k<degrees[i]; k++) { std::cerr << v.getOutNeighbor(k) << " "; }
-  //std::cerr << " | done getting" << std::endl;
-      }}
+    frontierVertices = newA(vertex, m);
+    {
+      parallel_for(size_t i = 0; i < m; i++) {
+        uintE v_id = vs.vtx(i);
+        vertex v = G[v_id];
+        degrees[i] = v.getOutDegree();
+        frontierVertices[i] = v;
+        // std::cerr << "edgeMapData | " << v_id << " " << degrees[i] << " " <<
+        // &v << std::endl; std::cerr << "getting outNeighbors | "; for (size_t
+        // k=0; k<degrees[i]; k++) { std::cerr << v.getOutNeighbor(k) << " "; }
+        // std::cerr << " | done getting" << std::endl;
+      }
+    }
     outDegrees = sequence::plusReduce(degrees, m);
     if (outDegrees == 0) return vertexSubsetData<data>(numVertices);
   }
   if (!(fl & no_dense) && m + outDegrees > threshold) {
-    if(degrees) free(degrees);
-    if(frontierVertices) free(frontierVertices);
+    if (degrees) free(degrees);
+    if (frontierVertices) free(frontierVertices);
     vs.toDense();
-    return (fl & dense_forward) ?
-      edgeMapDenseForward<data, vertex, VS, F>(GA, vs, f, fl) :
-      edgeMapDense<data, vertex, VS, F>(GA, vs, f, fl);
-  } else {
-    //std::cerr << "entering edgeMapSparse | ";
-    //for (size_t idx=0; idx < m; idx++) std::cerr << (void*) frontierVertices[idx].getOutNeighbors() << " ";
-    //std::cerr << " | done listing" << std::endl;
-    auto vs_out =
-      (should_output(fl) && fl & sparse_no_filter) ? // only call snof when we output
-      edgeMapSparse_no_filter<data, vertex, VS, F>(GA, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl) :
-      edgeMapSparse<data, vertex, VS, F>(GA, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl);
 #ifdef DEBUG
-    {parallel_for (size_t i=0; i < m; i++) {
-	    uintE v_id = vs.vtx(i);
-	    vertex& v = G[v_id];
-	    v.accesses += frontierVertices[i].accesses;
-      //std::cerr << "edgeMapData | " << v_id << " " << degrees[i] << " " << &v << std::endl;
-      //std::cerr << "getting outNeighbors | ";
-      //for (size_t k=0; k<degrees[i]; k++) { std::cerr << v.getOutNeighbor(k) << " "; }
-      //std::cerr << " | done getting" << std::endl;
-    }}
+    if (fl & dense_forward) {
+      writeAdd<long>(&GA.edgeMapDenseForward, 1);
+    } else {
+      writeAdd<long>(&GA.edgeMapDense, 1);
+      parallel_for(size_t i = 0; i < GA.n; i++) {
+        if ((fl & dense_parallel) && GA.V[i].getInDegree() >= 1000) {
+          writeAdd<long>(&GA.edgeMapDenseNL, 1);
+        } else {
+          writeAdd<long>(&GA.edgeMapDenseNLBreakEarly, 1);
+        }
+      }
+    }
 #endif
-    free(degrees); free(frontierVertices);
+    return (fl & dense_forward)
+               ? edgeMapDenseForward<data, vertex, VS, F>(GA, vs, f, fl)
+               : edgeMapDense<data, vertex, VS, F>(GA, vs, f, fl);
+  } else {
+    // std::cerr << "entering edgeMapSparse | ";
+    // for (size_t idx=0; idx < m; idx++) std::cerr << (void*)
+    // frontierVertices[idx].getOutNeighbors() << " "; std::cerr << " | done
+    // listing" << std::endl;
+
+#ifdef DEBUG
+    if (should_output(fl) && fl & sparse_no_filter) {
+      writeAdd<long>(&GA.edgeMapSparseNoFilter, 1);
+    } else {
+      writeAdd<long>(&GA.edgeMapSparse, 1);
+    }
+#endif
+    auto vs_out =
+        (should_output(fl) && fl & sparse_no_filter)
+            ?  // only call snof when we output
+            edgeMapSparse_no_filter<data, vertex, VS, F>(
+                GA, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl)
+            : edgeMapSparse<data, vertex, VS, F>(
+                  GA, frontierVertices, vs, degrees, vs.numNonzeros(), f, fl);
+#ifdef DEBUG
+    {
+      parallel_for(size_t i = 0; i < m; i++) {
+        uintE v_id = vs.vtx(i);
+        vertex& v = G[v_id];
+        v.accesses += frontierVertices[i].accesses;
+        // std::cerr << "edgeMapData | " << v_id << " " << degrees[i] << " " <<
+        // &v << std::endl; std::cerr << "getting outNeighbors | "; for (size_t
+        // k=0; k<degrees[i]; k++) { std::cerr << v.getOutNeighbor(k) << " "; }
+        // std::cerr << " | done getting" << std::endl;
+      }
+    }
+#endif
+    free(degrees);
+    free(frontierVertices);
     return vs_out;
   }
 }
 
 // Regular edgeMap, where no extra data is stored per vertex.
 template <class vertex, class VS, class F>
-vertexSubset edgeMap(graph<vertex>& GA, VS& vs, F f,
-    intT threshold = -1, const flags& fl=0) {
+vertexSubset edgeMap(graph<vertex>& GA, VS& vs, F f, intT threshold = -1,
+                     const flags& fl = 0) {
   return edgeMapData<pbbs::empty>(GA, vs, f, threshold, fl);
 }
 
@@ -322,10 +381,13 @@ vertexSubset edgeMap(graph<vertex>& GA, VS& vs, F f,
 // in the new adjacency list if p(ngh) is true.
 // Weighted graphs are not yet supported, but this should be easy to do.
 template <class vertex, class P>
-vertexSubsetData<uintE> packEdges(graph<vertex>& GA, vertexSubset& vs, P& p, const flags& fl=0) {
+vertexSubsetData<uintE> packEdges(graph<vertex>& GA, vertexSubset& vs, P& p,
+                                  const flags& fl = 0) {
   using S = tuple<uintE, uintE>;
   vs.toSparse();
-  vertex* G = GA.V; long m = vs.numNonzeros(); long n = vs.numRows();
+  vertex* G = GA.V;
+  long m = vs.numNonzeros();
+  long n = vs.numRows();
   if (vs.size() == 0) {
     return vertexSubsetData<uintE>(n);
   }
@@ -344,24 +406,28 @@ vertexSubsetData<uintE> packEdges(graph<vertex>& GA, vertexSubset& vs, P& p, con
   uintE* tmp1 = newA(uintE, outEdgeCount);
   uintE* tmp2 = newA(uintE, outEdgeCount);
   if (should_output(fl)) {
-    parallel_for (size_t i=0; i<m; i++) {
+    parallel_for(size_t i = 0; i < m; i++) {
       uintE v = vs.vtx(i);
       size_t offset = degrees[i];
-      auto bitsOff = &(bits[offset]); auto tmp1Off = &(tmp1[offset]);
+      auto bitsOff = &(bits[offset]);
+      auto tmp1Off = &(tmp1[offset]);
       auto tmp2Off = &(tmp2[offset]);
       size_t ct = G[v].packOutNgh(v, p, bitsOff, tmp1Off, tmp2Off);
       outV[i] = make_tuple(v, ct);
     }
   } else {
-    parallel_for (size_t i=0; i<m; i++) {
+    parallel_for(size_t i = 0; i < m; i++) {
       uintE v = vs.vtx(i);
       size_t offset = degrees[i];
-      auto bitsOff = &(bits[offset]); auto tmp1Off = &(tmp1[offset]);
+      auto bitsOff = &(bits[offset]);
+      auto tmp1Off = &(tmp1[offset]);
       auto tmp2Off = &(tmp2[offset]);
       size_t ct = G[v].packOutNgh(v, p, bitsOff, tmp1Off, tmp2Off);
     }
   }
-  free(bits); free(tmp1); free(tmp2);
+  free(bits);
+  free(tmp1);
+  free(tmp2);
   if (should_output(fl)) {
     return vertexSubsetData<uintE>(n, m, outV);
   } else {
@@ -370,12 +436,15 @@ vertexSubsetData<uintE> packEdges(graph<vertex>& GA, vertexSubset& vs, P& p, con
 }
 
 template <class vertex, class P>
-vertexSubsetData<uintE> edgeMapFilter(graph<vertex>& GA, vertexSubset& vs, P& p, const flags& fl=0) {
+vertexSubsetData<uintE> edgeMapFilter(graph<vertex>& GA, vertexSubset& vs, P& p,
+                                      const flags& fl = 0) {
   vs.toSparse();
   if (fl & pack_edges) {
     return packEdges<vertex, P>(GA, vs, p, fl);
   }
-  vertex* G = GA.V; long m = vs.numNonzeros(); long n = vs.numRows();
+  vertex* G = GA.V;
+  long m = vs.numNonzeros();
+  long n = vs.numRows();
   using S = tuple<uintE, uintE>;
   if (vs.size() == 0) {
     return vertexSubsetData<uintE>(n);
@@ -385,13 +454,13 @@ vertexSubsetData<uintE> edgeMapFilter(graph<vertex>& GA, vertexSubset& vs, P& p,
     outV = newA(S, vs.size());
   }
   if (should_output(fl)) {
-    parallel_for (size_t i=0; i<m; i++) {
+    parallel_for(size_t i = 0; i < m; i++) {
       uintE v = vs.vtx(i);
       size_t ct = G[v].countOutNgh(v, p);
       outV[i] = make_tuple(v, ct);
     }
   } else {
-    parallel_for (size_t i=0; i<m; i++) {
+    parallel_for(size_t i = 0; i < m; i++) {
       uintE v = vs.vtx(i);
       size_t ct = G[v].countOutNgh(v, p);
     }
@@ -403,55 +472,50 @@ vertexSubsetData<uintE> edgeMapFilter(graph<vertex>& GA, vertexSubset& vs, P& p,
   }
 }
 
-
-
 //*****VERTEX FUNCTIONS*****
 
-template <class F, class VS, typename std::enable_if<
-  !std::is_same<VS, vertexSubset>::value, int>::type=0 >
+template <class F, class VS,
+          typename std::enable_if<!std::is_same<VS, vertexSubset>::value,
+                                  int>::type = 0>
 void vertexMap(VS& V, F f) {
   size_t n = V.numRows(), m = V.numNonzeros();
-  if(V.dense()) {
-    parallel_for(long i=0;i<n;i++) {
-      if(V.isIn(i)) {
+  if (V.dense()) {
+    parallel_for(long i = 0; i < n; i++) {
+      if (V.isIn(i)) {
         f(i, V.ithData(i));
       }
     }
   } else {
-    parallel_for(long i=0;i<m;i++) {
-      f(V.vtx(i), V.vtxData(i));
-    }
+    parallel_for(long i = 0; i < m; i++) { f(V.vtx(i), V.vtxData(i)); }
   }
 }
 
-template <class VS, class F, typename std::enable_if<
-  std::is_same<VS, vertexSubset>::value, int>::type=0 >
+template <class VS, class F,
+          typename std::enable_if<std::is_same<VS, vertexSubset>::value,
+                                  int>::type = 0>
 void vertexMap(VS& V, F f) {
   size_t n = V.numRows(), m = V.numNonzeros();
-  if(V.dense()) {
-    parallel_for(long i=0;i<n;i++) {
-      if(V.isIn(i)) {
+  if (V.dense()) {
+    parallel_for(long i = 0; i < n; i++) {
+      if (V.isIn(i)) {
         f(i);
       }
     }
   } else {
-    parallel_for(long i=0;i<m;i++) {
-      f(V.vtx(i));
-    }
+    parallel_for(long i = 0; i < m; i++) { f(V.vtx(i)); }
   }
 }
 
-//Note: this is the version of vertexMap in which only a subset of the
-//input vertexSubset is returned
+// Note: this is the version of vertexMap in which only a subset of the
+// input vertexSubset is returned
 template <class F>
 vertexSubset vertexFilter(vertexSubset V, F filter) {
   long n = V.numRows(), m = V.numNonzeros();
   V.toDense();
-  bool* d_out = newA(bool,n);
-  {parallel_for(long i=0;i<n;i++) d_out[i] = 0;}
-  {parallel_for(long i=0;i<n;i++)
-      if(V.d[i]) d_out[i] = filter(i);}
-  return vertexSubset(n,d_out);
+  bool* d_out = newA(bool, n);
+  { parallel_for(long i = 0; i < n; i++) d_out[i] = 0; }
+  { parallel_for(long i = 0; i < n; i++) if (V.d[i]) d_out[i] = filter(i); }
+  return vertexSubset(n, d_out);
 }
 
 template <class F>
@@ -462,12 +526,14 @@ vertexSubset vertexFilter2(vertexSubset V, F filter) {
   }
   bool* bits = newA(bool, m);
   V.toSparse();
-  {parallel_for(size_t i=0; i<m; i++) {
-    uintE v = V.vtx(i);
-    bits[i] = filter(v);
-  }}
-  auto v_imap = make_in_imap<uintE>(m, [&] (size_t i) { return V.vtx(i); });
-  auto bits_m = make_in_imap<bool>(m, [&] (size_t i) { return bits[i]; });
+  {
+    parallel_for(size_t i = 0; i < m; i++) {
+      uintE v = V.vtx(i);
+      bits[i] = filter(v);
+    }
+  }
+  auto v_imap = make_in_imap<uintE>(m, [&](size_t i) { return V.vtx(i); });
+  auto bits_m = make_in_imap<bool>(m, [&](size_t i) { return bits[i]; });
   auto out = pbbs::pack(v_imap, bits_m);
   out.alloc = false;
   free(bits);
@@ -482,41 +548,39 @@ vertexSubset vertexFilter2(vertexSubsetData<data> V, F filter) {
   }
   bool* bits = newA(bool, m);
   V.toSparse();
-  parallel_for(size_t i=0; i<m; i++) {
+  parallel_for(size_t i = 0; i < m; i++) {
     auto t = V.vtxAndData(i);
     bits[i] = filter(std::get<0>(t), std::get<1>(t));
   }
-  auto v_imap = make_in_imap<uintE>(m, [&] (size_t i) { return V.vtx(i); });
-  auto bits_m = make_in_imap<bool>(m, [&] (size_t i) { return bits[i]; });
+  auto v_imap = make_in_imap<uintE>(m, [&](size_t i) { return V.vtx(i); });
+  auto bits_m = make_in_imap<bool>(m, [&](size_t i) { return bits[i]; });
   auto out = pbbs::pack(v_imap, bits_m);
   out.alloc = false;
   free(bits);
   return vertexSubset(n, out.size(), out.s);
 }
 
+// cond function that always returns true
+inline bool cond_true(intT d) { return 1; }
 
-
-//cond function that always returns true
-inline bool cond_true (intT d) { return 1; }
-
-template<class vertex>
+template <class vertex>
 void Compute(graph<vertex>&, commandLine);
 
-template<class vertex>
+template <class vertex>
 void Compute(hypergraph<vertex>&, commandLine);
 
 int parallel_main(int argc, char* argv[]) {
-  commandLine P(argc,argv," [-s] <inFile>");
+  commandLine P(argc, argv, " [-s] <inFile>");
   char* iFile = P.getArgument(0);
   bool symmetric = P.getOptionValue("-s");
   bool compressed = P.getOptionValue("-c");
   bool binary = P.getOptionValue("-b");
   bool mmap = P.getOptionValue("-m");
-  //cout << "mmap = " << mmap << endl;
-  long rounds = P.getOptionLongValue("-rounds",3);
+  // cout << "mmap = " << mmap << endl;
+  long rounds = P.getOptionLongValue("-rounds", 3);
 
   // --------------------------------------------------------------------------
-  long capacity = P.getOptionLongValue("-capacity",0);
+  long capacity = P.getOptionLongValue("-capacity", 0);
   bool reverse_metis = P.getOptionValue("-rmetis");
   char* npf = P.getOptionValue("-pf");
   if (npf != nullptr) std::cerr << "Node Partition file: " << npf << std::endl;
@@ -526,63 +590,71 @@ int parallel_main(int argc, char* argv[]) {
     if (symmetric) {
 #ifndef HYPER
       graph<compressedSymmetricVertex> G =
-        readCompressedGraph<compressedSymmetricVertex>(iFile,symmetric,mmap); //symmetric graph
+          readCompressedGraph<compressedSymmetricVertex>(
+              iFile, symmetric, mmap);  // symmetric graph
 #else
       hypergraph<compressedSymmetricVertex> G =
-        readCompressedHypergraph<compressedSymmetricVertex>(iFile,symmetric,mmap); //symmetric graph
+          readCompressedHypergraph<compressedSymmetricVertex>(
+              iFile, symmetric, mmap);  // symmetric graph
 #endif
-      Compute(G,P);
-      for(int r=0;r<rounds;r++) {
+      Compute(G, P);
+      for (int r = 0; r < rounds; r++) {
         startTime();
-        Compute(G,P);
+        Compute(G, P);
         nextTime("Running time");
       }
       G.del();
     } else {
 #ifndef HYPER
       graph<compressedAsymmetricVertex> G =
-        readCompressedGraph<compressedAsymmetricVertex>(iFile,symmetric,mmap); //asymmetric graph
+          readCompressedGraph<compressedAsymmetricVertex>(
+              iFile, symmetric, mmap);  // asymmetric graph
 #else
       hypergraph<compressedAsymmetricVertex> G =
-        readCompressedHypergraph<compressedAsymmetricVertex>(iFile,symmetric,mmap); //asymmetric graph
+          readCompressedHypergraph<compressedAsymmetricVertex>(
+              iFile, symmetric, mmap);  // asymmetric graph
 #endif
-      Compute(G,P);
-      if(G.transposed) G.transpose();
-      for(int r=0;r<rounds;r++) {
+      Compute(G, P);
+      if (G.transposed) G.transpose();
+      for (int r = 0; r < rounds; r++) {
         startTime();
-        Compute(G,P);
+        Compute(G, P);
         nextTime("Running time");
-        if(G.transposed) G.transpose();
+        if (G.transposed) G.transpose();
       }
       G.del();
     }
   } else {
     if (symmetric) {
 #ifndef HYPER
-      graph<symmetricVertex> G =
-        readGraph<symmetricVertex>(iFile,compressed,symmetric,binary,mmap,capacity,npf,reverse_metis); //symmetric graph
+      graph<symmetricVertex> G = readGraph<symmetricVertex>(
+          iFile, compressed, symmetric, binary, mmap, capacity, npf,
+          reverse_metis);  // symmetric graph
 #else
-      hypergraph<symmetricVertex> G =
-        readHypergraph<symmetricVertex>(iFile,compressed,symmetric,binary,mmap); //symmetric graph
+      hypergraph<symmetricVertex> G = readHypergraph<symmetricVertex>(
+          iFile, compressed, symmetric, binary, mmap);  // symmetric graph
 #endif
 #ifndef DEBUG
-      Compute(G,P);
+      Compute(G, P);
 #else
-      //why
-      parallel_for(long i=0; i<G.n; i++) G.V[i].accesses=0;
+      // why
+      parallel_for(long i = 0; i < G.n; i++) G.V[i].accesses = 0;
 #endif
-      for(int r=0;r<rounds;r++) {
+      for (int r = 0; r < rounds; r++) {
         startTime();
-        Compute(G,P);
+        Compute(G, P);
         nextTime("Running time");
       }
 #ifdef DEBUG
-      long dram_accesses =0;
-      long nvram_accesses =0;
-      for(long i=0; i<G.n; i++) {
+      long dram_accesses = 0;
+      long nvram_accesses = 0;
+      for (long i = 0; i < G.n; i++) {
         long a = G.V[i].accesses;
-        //std::cout << "node " << i << " | " << a << std::endl;
-        if (pmem_is_pmem(G.V[i].getOutNeighbors(), G.V[i].getOutDegree()*sizeof(uintE))) {
+#ifdef PERNODE
+        std::cout << i << "," << a << std::endl;
+#endif
+        if (pmem_is_pmem(G.V[i].getOutNeighbors(),
+                         G.V[i].getOutDegree() * sizeof(uintE))) {
           nvram_accesses += a;
         } else {
           dram_accesses += a;
@@ -590,36 +662,51 @@ int parallel_main(int argc, char* argv[]) {
       }
       std::cout << "done | dram accesses: " << dram_accesses << std::endl;
       std::cout << "done | nvram accesses: " << nvram_accesses << std::endl;
+      std::cout << "done | edgeMapDense calls: " << G.edgeMapDense << std::endl;
+      std::cout << "done | edgeMapDenseNL calls: " << G.edgeMapDenseNL
+                << std::endl;
+      std::cout << "done | edgeMapDenseNLBreakEarly calls: "
+                << G.edgeMapDenseNLBreakEarly << std::endl;
+      std::cout << "done | edgeMapDenseForward calls: " << G.edgeMapDenseForward
+                << std::endl;
+      std::cout << "done | edgeMapSparse calls: " << G.edgeMapSparse
+                << std::endl;
+      std::cout << "done | edgeMapSparseNoFilter calls: "
+                << G.edgeMapSparseNoFilter << std::endl;
 #endif
       G.del();
     } else {
 #ifndef HYPER
-      graph<asymmetricVertex> G =
-        readGraph<asymmetricVertex>(iFile,compressed,symmetric,binary,mmap,capacity); //asymmetric graph
+      graph<asymmetricVertex> G = readGraph<asymmetricVertex>(
+          iFile, compressed, symmetric, binary, mmap, capacity, npf,
+          reverse_metis);  // asymmetric graph
 #else
-      hypergraph<asymmetricVertex> G =
-        readHypergraph<asymmetricVertex>(iFile,compressed,symmetric,binary,mmap); //asymmetric graph
+      hypergraph<asymmetricVertex> G = readHypergraph<asymmetricVertex>(
+          iFile, compressed, symmetric, binary, mmap);  // asymmetric graph
 #endif
 #ifndef DEBUG
-      Compute(G,P);
+      Compute(G, P);
 #else
-      //why
-      parallel_for(long i=0; i<G.n; i++) G.V[i].accesses=0;
+      // why
+      parallel_for(long i = 0; i < G.n; i++) G.V[i].accesses = 0;
 #endif
-      if(G.transposed) G.transpose();
-      for(int r=0;r<rounds;r++) {
+      if (G.transposed) G.transpose();
+      for (int r = 0; r < rounds; r++) {
         startTime();
-        Compute(G,P);
+        Compute(G, P);
         nextTime("Running time");
-        if(G.transposed) G.transpose();
+        if (G.transposed) G.transpose();
       }
 #ifdef DEBUG
-      long dram_accesses =0;
-      long nvram_accesses =0;
-      for(long i=0; i<G.n; i++) {
+      long dram_accesses = 0;
+      long nvram_accesses = 0;
+      for (long i = 0; i < G.n; i++) {
         long a = G.V[i].accesses;
-        //std::cout << "node " << i << " | " << a << std::endl;
-        if (pmem_is_pmem(G.V[i].getOutNeighbors(), G.V[i].getOutDegree()*sizeof(uintE))) {
+#ifdef PERNODE
+        std::cout << i << "," << a << std::endl;
+#endif
+        if (pmem_is_pmem(G.V[i].getOutNeighbors(),
+                         G.V[i].getOutDegree() * sizeof(uintE))) {
           nvram_accesses += a;
         } else {
           dram_accesses += a;

@@ -1,5 +1,5 @@
 // This code is part of the project "Ligra: A Lightweight Graph Processing
-// Framework for Shared Memory", presented at Principles and Practice of 
+// Framework for Shared Memory", presented at Principles and Practice of
 // Parallel Programming, 2013.
 // Copyright (c) 2013 Julian Shun and Guy Blelloch
 //
@@ -30,22 +30,23 @@
 // implementation. For a more efficient implementation, see
 // http://www.cs.cmu.edu/~pbbs/benchmarks.html.
 
+#include "flags.h"
 #include "ligra.h"
 
-//For flags array to store status of each vertex
-enum {UNDECIDED,CONDITIONALLY_IN,OUT,IN};
+// For flags array to store status of each vertex
+enum { UNDECIDED, CONDITIONALLY_IN, OUT, IN };
 
-//Uncomment the following line to enable checking for
-//correctness. Currently the checker does not work with Ligra+.
+// Uncomment the following line to enable checking for
+// correctness. Currently the checker does not work with Ligra+.
 
 //#define CHECK 1
 
 #ifdef CHECK
-template<class vertex>
+template <class vertex>
 bool checkMis(graph<vertex>& G, int* flags) {
   const intE n = G.n;
   bool correct = true;
-  parallel_for (int i = 0; i < n; i++) {
+  parallel_for(int i = 0; i < n; i++) {
     intE outDeg = G.V[i].getOutDegree();
     intE numConflict = 0;
     intE numInNgh = 0;
@@ -53,16 +54,15 @@ bool checkMis(graph<vertex>& G, int* flags) {
       intE ngh = G.V[i].getOutNeighbor(j);
       if (flags[i] == IN && flags[ngh] == IN) {
         numConflict++;
-      }
-      else if (flags[ngh] == IN) {
+      } else if (flags[ngh] == IN) {
         numInNgh++;
       }
     }
     if (numConflict > 0) {
-      if(correct) CAS(&correct,true,false);
-    } 
+      if (correct) CAS(&correct, true, false);
+    }
     if (flags[i] != IN && numInNgh == 0) {
-      if(correct) CAS(&correct,true,false);
+      if (correct) CAS(&correct, true, false);
     }
   }
   return correct;
@@ -72,47 +72,60 @@ bool checkMis(graph<vertex>& G, int* flags) {
 struct MIS_Update {
   int* flags;
   MIS_Update(int* _flags) : flags(_flags) {}
-  inline bool update (uintE s, uintE d) {
-    //if neighbor is in MIS, then we are out
-    if(flags[d] == IN) {if(flags[s] != OUT) flags[s] = OUT;}
-    //if neighbor has higher priority (lower ID) and is undecided, then so are we
-    else if(d < s && flags[s] == CONDITIONALLY_IN && flags[d] < OUT)
+  inline bool update(uintE s, uintE d) {
+    // if neighbor is in MIS, then we are out
+    if (flags[d] == IN) {
+      if (flags[s] != OUT) flags[s] = OUT;
+    }
+    // if neighbor has higher priority (lower ID) and is undecided, then so are
+    // we
+    else if (d < s && flags[s] == CONDITIONALLY_IN && flags[d] < OUT)
       flags[s] = UNDECIDED;
     return 1;
   }
-  inline bool updateAtomic (uintE s, uintE d) {
-    if(flags[d] == IN) {if(flags[s] != OUT) flags[s] = OUT;}
-    else if(d < s && flags[s] == CONDITIONALLY_IN && flags[d] < OUT) 
+  inline bool updateAtomic(uintE s, uintE d) {
+    if (flags[d] == IN) {
+      if (flags[s] != OUT) flags[s] = OUT;
+    } else if (d < s && flags[s] == CONDITIONALLY_IN && flags[d] < OUT)
       flags[s] = UNDECIDED;
     return 1;
   }
-  inline bool cond (uintE i) {return cond_true(i);}
+  inline bool cond(uintE i) { return cond_true(i); }
 };
 
 struct MIS_Filter {
   int* flags;
   MIS_Filter(int* _flags) : flags(_flags) {}
-  inline bool operator () (uintE i) {
-    if(flags[i] == CONDITIONALLY_IN) { flags[i] = IN; return 0; } //vertex in MIS
-    else if(flags[i] == OUT) return 0; //vertex not in MIS
-    else { flags[i] = CONDITIONALLY_IN; return 1; } //vertex undecided, move to next round
+  inline bool operator()(uintE i) {
+    if (flags[i] == CONDITIONALLY_IN) {
+      flags[i] = IN;
+      return 0;
+    }  // vertex in MIS
+    else if (flags[i] == OUT)
+      return 0;  // vertex not in MIS
+    else {
+      flags[i] = CONDITIONALLY_IN;
+      return 1;
+    }  // vertex undecided, move to next round
   }
 };
 
-//Takes a symmetric graph as input; priority of a vertex is its ID.
+// Takes a symmetric graph as input; priority of a vertex is its ID.
 template <class vertex>
 void Compute(graph<vertex>& GA, commandLine P) {
   const intE n = GA.n;
   bool checkCorrectness = P.getOptionValue("-checkCorrectness");
 
-  //flags array: UNDECIDED means "undecided", CONDITIONALLY_IN means
+  // flags array: UNDECIDED means "undecided", CONDITIONALLY_IN means
   //"conditionally in MIS", OUT means "not in MIS", IN means "in MIS"
-  int* flags = newA(int,n);
+  int* flags = newA(int, n);
   bool* frontier_data = newA(bool, n);
-  {parallel_for(long i=0;i<n;i++) {
-    flags[i] = CONDITIONALLY_IN;
-    frontier_data[i] = 1;
-  }}
+  {
+    parallel_for(long i = 0; i < n; i++) {
+      flags[i] = CONDITIONALLY_IN;
+      frontier_data[i] = 1;
+    }
+  }
   long round = 0;
   vertexSubset Frontier(n, frontier_data);
   while (!Frontier.isEmpty()) {
@@ -124,8 +137,10 @@ void Compute(graph<vertex>& GA, commandLine P) {
   }
 #ifdef CHECK
   if (checkCorrectness) {
-    if(checkMis(GA,flags)) cout << "correct\n";
-    else cout << "incorrect\n";
+    if (checkMis(GA, flags))
+      cout << "correct\n";
+    else
+      cout << "incorrect\n";
   }
 #endif
   free(flags);

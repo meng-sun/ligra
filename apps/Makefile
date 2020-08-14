@@ -25,7 +25,8 @@ endif
 #compilers
 ifdef CILK
 PCC = clang++
-PCFLAGS = -O3 -L/root/misc/cilkrts/build/install/lib -I/root/misc/cilkrts/build/install/include -L/root/pmdk/src/debug -I/root/pmdk/src/include -lpmem -std=c++14 -fcilkplus -lcilkrts -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
+PCFLAGS = -O3 -lpmem -std=c++14 -fcilkplus -lcilkrts -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
+#PCFLAGS = -O3 -L/root/misc/cilkrts/build/install/lib -I/root/misc/cilkrts/build/install/include -L/root/pmdk/src/debug -I/root/pmdk/src/include -lpmem -std=c++14 -fcilkplus -lcilkrts -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
 #-I /root/tgdb-latest/build/third_party/memkind/src/memkind-project/include  -L/root/tgdb/build/third_party/memkind/src/memkind-project/.libs -lmemkind -fcilkplus -lcilkrts -O3 -DCILK $(INTT) $(INTE) $(CODE) $(PD) $(MEM)
 PLFLAGS = -fcilkplus -lcilkrts
 
